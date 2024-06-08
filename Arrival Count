@@ -1,0 +1,39 @@
+#read excel
+df = pd.read_excel('trace.xlsx')
+
+# concatenate the two columns with instances of arrivals (service in this case) & drop NaN values
+df_cleaned = pd.concat([df['current_component'], df['action']]).dropna()
+
+# using string split method to only have the first word in the column
+df_cleaned = df_cleaned.str.split(" ", n = 1, expand = True)
+
+# removing all the values that do not contain service
+filtered_df = df_cleaned[df_cleaned[0].str.startswith('s')]
+
+# counting unique calues
+unique_counts = filtered_df[0].value_counts()
+
+# Creating a new DataFrame with unique entries and their counts
+unique_counts_df = unique_counts.reset_index()
+unique_counts_df.columns = ['Entry', 'Count']
+print("unique")
+print(unique_counts_df)
+
+# sorting the array and removing the first 10 and last 10 values
+sorted_unique_counts_df = unique_counts_df.sort_values(by='Entry')
+sorted_unique_counts_df = unique_counts_df.iloc[10:-10]
+
+print("sorted")
+print(sorted_unique_counts_df)
+
+
+#sampling 100 values from the Dataframe
+sampled_df = sorted_unique_counts_df.sample(n=30, random_state=1)
+
+# Calculating the average of the count
+average_count = sampled_df['Count'].mean()
+
+# Displaying the sampled DataFrame and the average count
+print("Sampled DataFrame:")
+print(sampled_df)
+print("\nAverage Count of Sampled Entries:", average_count)
