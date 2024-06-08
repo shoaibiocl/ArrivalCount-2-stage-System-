@@ -1,0 +1,102 @@
+import salabim as sim
+import pandas as pd
+import numpy as np
+import greenlet
+import datetime
+
+
+class Arrival(sim.Component):
+
+    def process(self):
+        count = 0;
+
+        if env.now() < warmup:
+            while True:
+                Service()
+                yield self.hold(np.random.exponential(2))
+
+        else:
+            while True:
+                Service()
+                yield self.hold(np.random.exponential(2))
+                count += 1
+
+
+class Service(sim.Component):
+
+    def process(self):
+
+        if env.now() >= warmup:
+
+            self.enter(queue1)
+            yield self.request(server1)
+            yield self.hold(1)
+            self.release()
+            self.enter(queue2)
+            yield self.request(server2)
+            yield self.hold(1)
+            self.release()
+
+
+class MyEnvironment(sim.Environment):
+    def __init__(self, cache_trace=True, *args, **kwargs):
+
+        self.cache_trace = cache_trace
+        if cache_trace:
+            self.trace_cache = []
+        super().__init__(*args, **kwargs)
+
+    def print_trace(self, s1='', s2='', s3='', s4='', s0=None, **kwargs):
+        super().print_trace(s1=s1, s2=s2, s3=s3, s4=s4, s0=s0, **kwargs)
+        if self.cache_trace and self.trace():
+
+            if not s0 in ('line#', '------'):  # skip header and header underline
+                self.trace_cache.append({
+                    'line#': s0,
+                    'time': s1,
+                    'current_component': s2,
+                    'action': s3,
+                    'information': s4,
+                })
+
+
+global env
+global warmup
+global server1
+global server2
+global queue1
+global queue2
+warmup = 0
+
+
+def main():
+
+    global env
+    global server1
+    global server2
+    global queue1
+    global queue2
+
+    replication = 1
+
+    for j in range(0, replication):
+        start_time = datetime.datetime.now()
+        env = MyEnvironment(cache_trace=True)
+        #env = sim.Environment(trace=False, set_numpy_random_seed=True)
+        server1 = sim.Resource("Server 1", capacity=1)
+        server2 = sim.Resource("Server 2", capacity=1)
+        queue1 = sim.Queue(name="Queue 1")
+        queue2 = sim.Queue(name="Queue 2")
+        Arrival()
+        env.run(warmup)
+        env.trace(True)
+        env.run(100)
+        end_time = datetime.datetime.now()
+        print("Replication number {} done in time {}. ".format(j, (end_time-start_time)))
+        df_trace = pd.DataFrame(env.trace_cache)
+        df_trace.to_excel('trace.xlsx')
+
+
+if __name__ == '__main__':
+    sim.yieldless(False)
+    main()
