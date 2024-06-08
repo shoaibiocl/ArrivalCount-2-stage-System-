@@ -28,7 +28,7 @@ print(sorted_unique_counts_df)
 
 
 #sampling 100 values from the Dataframe
-sampled_df = sorted_unique_counts_df.sample(n=30, random_state=1)
+sampled_df = sorted_unique_counts_df.sample(n=100, random_state=1)
 
 # Calculating the average of the count
 average_count = sampled_df['Count'].mean()
