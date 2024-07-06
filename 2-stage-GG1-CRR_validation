@@ -1,0 +1,176 @@
+
+import salabim as sim
+import pandas as pd
+import numpy as np
+import greenlet
+import time
+import datetime
+
+
+class Arrival(sim.Component):
+
+    def process(self):
+
+        global iat_m
+        global iat_sd
+
+        while True:
+
+            Service()
+            yield self.hold(sim.Normal(iat_m, iat_sd).bounded_sample(0.01))
+
+
+class Service(sim.Component):
+
+    def process(self):
+
+        global st1
+        global st2
+        global sd2
+        global env
+        global warmup
+        global count
+
+        if env.now() < warmup:
+
+            self.enter(queue1)
+            yield self.request(server1)
+            yield self.hold(sim.Exponential(st1).sample())
+            self.release()
+            self.enter(queue2)
+            yield self.request(server2)
+            yield self.hold(sim.Normal(st2, sd2).bounded_sample(0.01))
+            self.release()
+
+        else:
+            count += 1
+            #print(count)
+            self.enter(queue1)
+            yield self.request(server1)
+            yield self.hold(sim.Exponential(st1).sample())
+            self.release()
+            self.enter(queue2)
+            yield self.request(server2)
+            yield self.hold(sim.Normal(st2, sd2).bounded_sample(0.01))
+            self.release()
+
+
+class MyEnvironment(sim.Environment):
+    def __init__(self, cache_trace=True, *args, **kwargs):
+
+        self.cache_trace = cache_trace
+
+        if cache_trace:
+            self.trace_cache = []
+        super().__init__(*args, **kwargs)
+
+    def print_trace(self, s1='', s2='', s3='', s4='', s0=None, **kwargs):
+        super().print_trace(s1=s1, s2=s2, s3=s3, s4=s4, s0=s0, **kwargs)
+        if self.cache_trace and self.trace():
+
+            if not s0 in ('line#', '------'):  # skip header and header underline
+                self.trace_cache.append({
+                    'line#': s0,
+                    'time': s1,
+                    'current_component': s2,
+                    'action': s3,
+                    'information': s4,
+                })
+
+
+global env
+global warmup
+global server1
+global server2
+global queue1
+global queue2
+
+global st1
+global st2
+global sd2
+global iat_m
+global arrivals
+
+arrivals = []
+
+global iat_sd
+iat_sd = 0.5
+st1 = 2
+st2 = 2
+sd2 = 0.2
+warmup = 1440*180
+
+def main():
+
+    global env
+    global server1
+    global server2
+    global queue1
+    global queue2
+    global iat_m
+    global util1
+    global util2
+    global iat1
+    global arrivals
+    global count
+    count = 0
+
+    util1 = []
+    util2 = []
+
+    iat1 = []
+    utilisation = [0.37082578, 0.5015179,  0.38448501, 0.28599711, 0.791658,   0.32886572,
+                   0.50569746, 0.27954286, 0.56289139, 0.63373056, 0.45632942, 0.23194765,
+                   0.80979885, 0.85594466, 0.44845982, 0.62105577, 0.46227531, 0.36930253,
+                   0.37799356, 0.91948457]
+
+    for k in utilisation:
+        iat_m = st1/k
+        print(iat_m)
+        replication = 30
+        util_server1 = []
+        util_server2 = []
+        arrival_count = []
+        run_time = []
+
+        for j in range(0, replication):
+
+            env = MyEnvironment(cache_trace=True, random_seed='')
+            server1 = sim.Resource("Server 1", capacity=1)
+            server2 = sim.Resource("Server 2", capacity=1)
+            queue1 = sim.Queue(name="Queue 1")
+            queue2 = sim.Queue(name="Queue 2")
+            Arrival()
+            env.run(warmup)
+            start_time = time.time()
+            runtime = 1440*365
+            env.run(runtime)
+            end_time = time.time()
+            util_server1.append(server1.occupancy.slice(warmup,(warmup+runtime)).mean())
+            util_server2.append(server2.occupancy.slice(warmup, (warmup + runtime)).mean())
+            #print("Server utilisation without slice: ", server1.occupancy.mean())
+            #print("Server utilisation with slice: ", server1.occupancy.slice(warmup, warmup+runtime).mean())
+            arrival_count.append(count)
+            count = 0
+            print("Replication number {} done in time {}. ".format(j, (end_time-start_time)))
+            run_time.append(end_time-start_time)
+
+        util1.append(np.mean(util_server1))
+        util2.append(np.mean(util_server2))
+        iat1.append(np.mean(run_time))
+        arrivals.append(np.mean(arrival_count))
+
+    df = pd.DataFrame({
+        'Server 1 utilisation': util1,
+        'Server 2 utilisation': util2,
+        'Total Arrivals': arrivals,
+        'Run time': iat1})
+
+    # Write the DataFrame to an Excel file
+    excel_file_path = '2-stage-GG1-runtime_val.xlsx'
+    df.to_excel(excel_file_path,index=False)
+
+
+if __name__ == '__main__':
+    sim.yieldless(False)
+    main()
