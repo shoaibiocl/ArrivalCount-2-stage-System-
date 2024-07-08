@@ -11,16 +11,10 @@ class Arrival(sim.Component):
         global iat
         count = 0
 
-        if env.now() < warmup:
-            while True:
-                Service()
-                yield self.hold(np.random.exponential(iat))
-
-        else:
-            while True:
-                Service()
-                yield self.hold(np.random.exponential(iat))
-                count += 1
+        while True:
+            Service()
+            yield self.hold(np.random.exponential(iat))
+            count += 1
 
 
 class Service(sim.Component):
@@ -31,20 +25,20 @@ class Service(sim.Component):
         global st2
         global sd2
 
-        if env.now() <warmup:
+        if env.now() < warmup:
 
             self.enter(queue1)
             yield self.request(server1)
+            self.leave(queue1)
             yield self.hold(sim.Exponential(st1).sample())
-            self.release()
-            
+            self.release(server1)
 
         else:
             self.enter(queue1)
             yield self.request(server1)
+            self.leave(queue1)
             yield self.hold(sim.Exponential(st1).sample())
-            self.release()
-            
+            self.release(server1)
 
 
 class MyEnvironment(sim.Environment):
@@ -85,11 +79,10 @@ st1 = 2
 st2 = 2
 sd2 = 0.2
 
-warmup = 1440
+warmup = 1440*200
 
 
 def main():
-
     global env
     global server1
     global server2
@@ -106,11 +99,11 @@ def main():
     arrivals = []
     iat1 = []
 
-    utilisation = np.arange(0.45, 0.46, 0.01)
+    utilisation = np.arange(0.20, 0.93, 0.01)
     for k in utilisation:
-        iat = st1/k
+        iat = st1 / k
         print(iat)
-        replication = 30
+        replication = 10
         util_server1 = []
         util_server2 = []
         arrival_count = []
@@ -122,11 +115,11 @@ def main():
             Arrival()
             env.run(warmup)
             env.trace(True)
-            runtime = 1440*2
+            runtime = 1440 * 3
             env.run(runtime)
             end_time = datetime.datetime.now()
-            util_server1.append(server1.occupancy.slice(warmup,(warmup+runtime)).mean())
-          
+            util_server1.append(server1.occupancy.slice(warmup, (warmup + runtime)).mean())
+
             # create a trace dataframe
             df = pd.DataFrame(env.trace_cache)
             # concatenate the two columns with instances of arrivals (service in this case) & drop NaN values
@@ -155,7 +148,7 @@ def main():
             print(sorted_unique_counts_df)
 
             # sampling 100 values from the Dataframe
-            sampled_df = sorted_unique_counts_df.sample(n=300, random_state=1)
+            sampled_df = sorted_unique_counts_df.sample(n=100, random_state=1)
 
             # Calculating the average of the count
             arrival_count.append(sampled_df['Count'].mean())
@@ -169,11 +162,10 @@ def main():
         'Instructions per arrival': arrivals,
         'Inter arrival time': iat1})
 
-
     # Write the DataFrame to an Excel file
-    excel_file_path = 'output.xlsx'
-   
-    df.to_excel(excel_file_path,index=False)
+    excel_file_path = 'SingleStageMG1_v1.xlsx'
+
+    df.to_excel(excel_file_path, index=False)
 
 
 if __name__ == '__main__':
