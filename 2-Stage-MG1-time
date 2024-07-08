@@ -2,6 +2,7 @@ import salabim as sim
 import pandas as pd
 import numpy as np
 import greenlet
+import time
 import datetime
 
 
@@ -9,18 +10,14 @@ class Arrival(sim.Component):
 
     def process(self):
         global iat
-        count = 0
+        global count
+        global warmup
+        global env
 
-        if env.now() < warmup:
-            while True:
-                Service()
-                yield self.hold(np.random.exponential(iat))
-
-        else:
-            while True:
-                Service()
-                yield self.hold(np.random.exponential(iat))
-                count += 1
+        while True:
+            count += 1
+            Service()
+            yield self.hold(sim.Exponential(iat).sample())
 
 
 class Service(sim.Component):
@@ -30,27 +27,33 @@ class Service(sim.Component):
         global st1
         global st2
         global sd2
+        global env
+        global warmup
 
-        if env.now() <warmup:
+        if env.now() < warmup:
 
             self.enter(queue1)
             yield self.request(server1)
+            self.leave(queue1)
             yield self.hold(sim.Exponential(st1).sample())
-            self.release()
+            self.release(server1)
             self.enter(queue2)
             yield self.request(server2)
+            self.leave(queue2)
             yield self.hold(sim.Normal(st2, sd2).bounded_sample(0.01))
-            self.release()
+            self.release(server2)
 
         else:
             self.enter(queue1)
             yield self.request(server1)
+            self.leave(queue1)
             yield self.hold(sim.Exponential(st1).sample())
-            self.release()
+            self.release(server2)
             self.enter(queue2)
             yield self.request(server2)
+            self.leave(queue2)
             yield self.hold(sim.Normal(st2, sd2).bounded_sample(0.01))
-            self.release()
+            self.release(server2)
 
 
 class MyEnvironment(sim.Environment):
@@ -87,12 +90,14 @@ global st1
 global st2
 global sd2
 global iat
+global arrivals
+
+arrivals = []
+
 st1 = 2
 st2 = 2
 sd2 = 0.2
-
 warmup = 1440*180
-
 
 def main():
 
@@ -106,12 +111,14 @@ def main():
     global util2
     global iat1
     global arrivals
+    global count
+    count = 0
 
     util1 = []
     util2 = []
-    arrivals = []
+
     iat1 = []
-    utilisation = np.arange(0.45, 0.46, 0.01)
+    utilisation = np.arange(0.2, 0.92, 0.01)
     for k in utilisation:
         iat = st1/k
         print(iat)
@@ -120,8 +127,9 @@ def main():
         util_server2 = []
         arrival_count = []
         run_time = []
+
         for j in range(0, replication):
-            
+
             env = MyEnvironment(cache_trace=True, random_seed='')
             server1 = sim.Resource("Server 1", capacity=1)
             server2 = sim.Resource("Server 2", capacity=1)
@@ -129,18 +137,21 @@ def main():
             queue2 = sim.Queue(name="Queue 2")
             Arrival()
             env.run(warmup)
-            start_time = datetime.datetime.now()
+            start_time = time.time()
             runtime = 1440*365
             env.run(runtime)
-            end_time = datetime.datetime.now()
+            end_time = time.time()
             util_server1.append(server1.occupancy.slice(warmup,(warmup+runtime)).mean())
             util_server2.append(server2.occupancy.slice(warmup, (warmup + runtime)).mean())
+            arrival_count.append(count)
+            count = 0
             print("Replication number {} done in time {}. ".format(j, (end_time-start_time)))
             run_time.append(end_time-start_time)
+
         util1.append(np.mean(util_server1))
         util2.append(np.mean(util_server2))
         iat1.append(np.mean(run_time))
-        arrivals.append(np.mean(Arrival.count))
+        arrivals.append(np.mean(arrival_count))
 
     df = pd.DataFrame({
         'Server 1 utilisation': util1,
@@ -148,9 +159,8 @@ def main():
         'Total Arrivals': arrivals,
         'Run time': iat1})
 
-
     # Write the DataFrame to an Excel file
-    excel_file_path = '2-stage-MG1-runtime.xlsx'
+    excel_file_path = '2-stage-MG1-runtime_v1.xlsx'
     df.to_excel(excel_file_path,index=False)
 
 
