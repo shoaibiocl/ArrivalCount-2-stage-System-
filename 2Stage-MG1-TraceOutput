@@ -11,16 +11,10 @@ class Arrival(sim.Component):
         global iat
         count = 0
 
-        if env.now() < warmup:
-            while True:
-                Service()
-                yield self.hold(np.random.exponential(iat))
-
-        else:
-            while True:
-                Service()
-                yield self.hold(np.random.exponential(iat))
-                count += 1
+        while True:
+            Service()
+            yield self.hold(np.random.exponential(iat))
+            count += 1
 
 
 class Service(sim.Component):
@@ -35,22 +29,26 @@ class Service(sim.Component):
 
             self.enter(queue1)
             yield self.request(server1)
+            self.leave(queue1)
             yield self.hold(sim.Exponential(st1).sample())
-            self.release()
+            self.release(server1)
             self.enter(queue2)
             yield self.request(server2)
+            self.leave(queue2)
             yield self.hold(sim.Normal(st2, sd2).bounded_sample(0.01))
-            self.release()
+            self.release(server2)
 
         else:
             self.enter(queue1)
             yield self.request(server1)
+            self.leave(queue1)
             yield self.hold(sim.Exponential(st1).sample())
-            self.release()
+            self.release(server1)
             self.enter(queue2)
             yield self.request(server2)
+            self.leave(queue2)
             yield self.hold(sim.Normal(st2, sd2).bounded_sample(0.01))
-            self.release()
+            self.release(server2)
 
 
 class MyEnvironment(sim.Environment):
@@ -91,7 +89,7 @@ st1 = 2
 st2 = 2
 sd2 = 0.2
 
-warmup = 1440
+warmup = 1440*200
 
 
 def main():
@@ -112,12 +110,11 @@ def main():
     arrivals = []
     iat1 = []
 
-    utilisation = np.arange(0.25, 0.93, 0.01)
+    utilisation = np.arange(0.2, 0.93, 0.01)
     for k in utilisation:
-        iat = st1 /k
+        iat = st1/k
         print(iat)
-
-        replication = 30
+        replication = 10
         util_server1 = []
         util_server2 = []
         arrival_count = []
@@ -131,7 +128,7 @@ def main():
             Arrival()
             env.run(warmup)
             env.trace(True)
-            runtime = 1440*2
+            runtime = 1440*3
             env.run(runtime)
             end_time = datetime.datetime.now()
             util_server1.append(server1.occupancy.slice(warmup,(warmup+runtime)).mean())
@@ -179,12 +176,10 @@ def main():
         'Server 1  utilisation': util1,
         'Server 2  utilisation': util2,
         'Instructions per arrival': arrivals,
-        'Inter arrival time': iat1
-
-    })
+        'Inter arrival time': iat1})
 
     # Write the DataFrame to an Excel file
-    excel_file_path = 'output.xlsx'
+    excel_file_path = '2StageMG1_v1.xlsx'
     df.to_excel(excel_file_path,index=False)
 
 
