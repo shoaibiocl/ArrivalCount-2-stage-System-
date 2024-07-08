@@ -1,0 +1,156 @@
+import salabim as sim
+import pandas as pd
+import numpy as np
+import greenlet
+import time
+import datetime
+
+
+class Arrival(sim.Component):
+
+    def process(self):
+        global iat
+
+        global warmup
+        global env
+
+        while True:
+
+            Service()
+            yield self.hold(sim.Exponential(iat).sample())
+
+
+class Service(sim.Component):
+
+    def process(self):
+
+        global st1
+        global st2
+        global sd2
+        global env
+        global warmup
+        global count
+
+        if env.now() < warmup:
+
+            self.enter(queue1)
+            yield self.request(server1)
+            self.leave(queue1)
+            yield self.hold(sim.Exponential(st1).sample())
+            self.release(server1)
+          
+        else:
+            count += 1
+            self.enter(queue1)
+            yield self.request(server1)
+            self.leave(queue1)
+            yield self.hold(sim.Exponential(st1).sample())
+            self.release(server1)
+       
+
+
+class MyEnvironment(sim.Environment):
+    def __init__(self, cache_trace=True, *args, **kwargs):
+
+        self.cache_trace = cache_trace
+
+        if cache_trace:
+            self.trace_cache = []
+        super().__init__(*args, **kwargs)
+
+    def print_trace(self, s1='', s2='', s3='', s4='', s0=None, **kwargs):
+        super().print_trace(s1=s1, s2=s2, s3=s3, s4=s4, s0=s0, **kwargs)
+        if self.cache_trace and self.trace():
+
+            if not s0 in ('line#', '------'):  # skip header and header underline
+                self.trace_cache.append({
+                    'line#': s0,
+                    'time': s1,
+                    'current_component': s2,
+                    'action': s3,
+                    'information': s4,
+                })
+
+
+global env
+global warmup
+global server1
+global server2
+global queue1
+global queue2
+
+global st1
+global st2
+global sd2
+global iat
+global arrivals
+
+arrivals = []
+
+st1 = 2
+st2 = 2
+sd2 = 0.2
+warmup = 1440*180
+
+def main():
+
+    global env
+    global server1
+    global server2
+    global queue1
+    global queue2
+    global iat
+    global util1
+    global util2
+    global iat1
+    global arrivals
+    global count
+    count = 0
+
+    util1 = []
+    util2 = []
+
+    iat1 = []
+    utilisation = np.arange(0.2, 0.93, 0.01)
+    for k in utilisation:
+        iat = st1/k
+        print(iat)
+        replication = 30
+        util_server1 = []
+        arrival_count = []
+        run_time = []
+
+        for j in range(0, replication):
+
+            env = MyEnvironment(cache_trace=True, random_seed='')
+            server1 = sim.Resource("Server 1", capacity=1)
+            queue1 = sim.Queue(name="Queue 1")
+            Arrival()
+            env.run(warmup)
+            start_time = time.time()
+            runtime = 1440*365
+            env.run(runtime)
+            end_time = time.time()
+            util_server1.append(server1.occupancy.slice(warmup,(warmup+runtime)).mean())
+            arrival_count.append(count)
+            count = 0
+            print("Replication number {} done in time {}. ".format(j, (end_time-start_time)))
+            run_time.append(end_time-start_time)
+
+        util1.append(np.mean(util_server1))
+        iat1.append(np.mean(run_time))
+        arrivals.append(np.mean(arrival_count))
+
+    df = pd.DataFrame({
+        'Server 1 utilisation': util1,
+        'Total Arrivals': arrivals,
+        'Run time': iat1})
+
+    # Write the DataFrame to an Excel file
+    excel_file_path = '1-stage-MG1-runtime_v1.xlsx'
+    df.to_excel(excel_file_path,index=False)
+
+
+if __name__ == '__main__':
+    sim.yieldless(False)
+    main()
