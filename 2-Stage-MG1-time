@@ -1,3 +1,6 @@
+"""This code models a 2-stage tandem queuing DES model. It uses Python's Salabim library and can be used to record the simulation model computational run time. The output is recorded in an Excel spreadsheet and 
+contains server utilisation values, number of arrivals and run time data."""
+
 import salabim as sim
 import pandas as pd
 import numpy as np
